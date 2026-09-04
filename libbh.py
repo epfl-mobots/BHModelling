@@ -122,7 +122,7 @@ class ABC(Frame):
                 htr_nb=int(ABC.htr_mapping[i][j][-1])
                 if self.brood_data[htr_nb] > 0:
                     color = "blue"
-                    # Brood level is already a 0-1 coverage fraction (1 = Co, 0.6666 = Co
+                    # Brood level is already a 0-1 coverage fraction (1 = Co, 0.5 = Co
                     # éparse, 0.3333 = Co en bordure) - use it as opacity directly.
                     opacity=self.brood_data[htr_nb] if self.brood_data[htr_nb] <= 1.0 else 1.0 # Cap opacity at 1.0
                 else:
@@ -153,7 +153,7 @@ class ABC(Frame):
         Loads the brood and honey data into the ABC object.
 
         :param brood_data: 10 values, indexed by htr_nb (0-9). Each is a 0-1 brood coverage
-            fraction (0 = none, 0.3333 = Co en bordure, 0.6666 = Co éparse, 1 = Co/full).
+            fraction (0 = none, 0.3333 = Co en bordure, 0.5 = Co éparse, 1 = Co/full).
         :param honey_data: 10 values, indexed by htr_nb (0-9). Each is a honey volume in ml,
             capped at MAX_HONEY_ML for opacity purposes.
         """
