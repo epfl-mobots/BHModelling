@@ -5,6 +5,10 @@ import plotly.graph_objects as go
 import numpy as np
 from abc import ABC, abstractmethod
 
+# Theoretical max volume (ml) of honey a single ABC subregion can hold. honey_data values are
+# raw ml, capped at this for opacity purposes.
+MAX_HONEY_ML = 200
+
 # Helper to make a flat colored wall (surface)
 def make_wall(x, y, z, color="saddlebrown", opacity=0.5, name:str="", legendgroup:str="", legendrank:int=1000, legendgrouptitle:dict={}, showlegend:bool=False):
     return go.Surface(
@@ -118,10 +122,13 @@ class ABC(Frame):
                 htr_nb=int(ABC.htr_mapping[i][j][-1])
                 if self.brood_data[htr_nb] > 0:
                     color = "blue"
-                    opacity=self.opacity
+                    # Brood level is already a 0-1 coverage fraction (1 = Co, 0.6666 = Co
+                    # éparse, 0.3333 = Co en bordure) - use it as opacity directly.
+                    opacity=self.brood_data[htr_nb] if self.brood_data[htr_nb] <= 1.0 else 1.0 # Cap opacity at 1.0
                 else:
                     color = "yellow"
-                    opacity=self.honey_data[htr_nb]/200 if self.honey_data[htr_nb] <= 200 else 1.0 # Cap opacity at 1.0
+                    # Honey volume is in ml; MAX_HONEY_ML is the theoretical max one subregion can hold.
+                    opacity=self.honey_data[htr_nb]/MAX_HONEY_ML if self.honey_data[htr_nb] <= MAX_HONEY_ML else 1.0 # Cap opacity at 1.0
 
                 subframe = make_wall(
                     x=[[self.x, self.x], [self.x, self.x]],
@@ -144,6 +151,11 @@ class ABC(Frame):
     def load_data(self, brood_data: list, honey_data: list):
         """
         Loads the brood and honey data into the ABC object.
+
+        :param brood_data: 10 values, indexed by htr_nb (0-9). Each is a 0-1 brood coverage
+            fraction (0 = none, 0.3333 = Co en bordure, 0.6666 = Co éparse, 1 = Co/full).
+        :param honey_data: 10 values, indexed by htr_nb (0-9). Each is a honey volume in ml,
+            capped at MAX_HONEY_ML for opacity purposes.
         """
         self.brood_data = brood_data
         self.honey_data = honey_data
@@ -224,6 +236,11 @@ class BoxHive(PlotlyObject):
     def loadABCdata(self, brood_data: dict, honey_data: dict):
         """
         Loads the brood and honey data into the ABC objects.
+
+        :param brood_data: {abc_name: 10 values (htr_nb 0-9)}, each a 0-1 brood coverage
+            fraction. See ABC.load_data.
+        :param honey_data: {abc_name: 10 values (htr_nb 0-9)}, each a honey volume in ml
+            (MAX_HONEY_ML theoretical max per subregion). See ABC.load_data.
         """
         for abc in self.occupancy.values():
             if isinstance(abc, ABC):
