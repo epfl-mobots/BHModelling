@@ -71,7 +71,7 @@ class Partition(Frame):
         super().__init__(x,height,depth,opacity)
 
     def draw_plotly(self, hive_height, hive_depth, show_legend:bool=False):
-        super().draw_plotly(hive_height,hive_depth,"black","partition", show_legend)
+        super().draw_plotly(hive_height,hive_depth,"blue","partition", show_legend)
     
 class ABC(Frame):
     htr_mapping = {
@@ -102,7 +102,8 @@ class ABC(Frame):
         self.position = position
 
     def draw_plotly(self, hive_height, hive_depth, show_legend:bool=False):
-        # Check that brood and honey data have been loaded
+        # Check that brood and honey data have been loaded (nectar_data/pollen_data are always
+        # set alongside them by load_data, defaulting to all-zero if not given)
         assert hasattr(self, 'brood_data'), "Brood data not loaded"
         assert hasattr(self, 'honey_data'), "Honey data not loaded"
 
@@ -120,15 +121,31 @@ class ABC(Frame):
 
 
                 htr_nb=int(ABC.htr_mapping[i][j][-1])
+                # load_data already guarantees at most one of these is nonzero per subregion,
+                # so the check order here doesn't matter - it's just which colour a subregion is.
                 if self.brood_data[htr_nb] > 0:
-                    color = "blue"
+                    color = "brown"
                     # Brood level is already a 0-1 coverage fraction (1 = Co, 0.5 = Co
                     # éparse, 0.3333 = Co en bordure) - use it as opacity directly.
                     opacity=self.brood_data[htr_nb] if self.brood_data[htr_nb] <= 1.0 else 1.0 # Cap opacity at 1.0
-                else:
+                elif self.honey_data[htr_nb] > 0:
                     color = "yellow"
                     # Honey volume is in ml; MAX_HONEY_ML is the theoretical max one subregion can hold.
                     opacity=self.honey_data[htr_nb]/MAX_HONEY_ML if self.honey_data[htr_nb] <= MAX_HONEY_ML else 1.0 # Cap opacity at 1.0
+                elif self.nectar_data[htr_nb] > 0:
+                    color = "beige"  # uncapped nectar/syrup - not yet capped as honey
+                    # Coverage fraction, same convention as brood - use it as opacity directly.
+                    opacity=self.nectar_data[htr_nb] if self.nectar_data[htr_nb] <= 1.0 else 1.0 # Cap opacity at 1.0
+                elif self.pollen_data[htr_nb] > 0:
+                    color = "orange"
+                    # Coverage fraction, same convention as brood - use it as opacity directly.
+                    opacity=self.pollen_data[htr_nb] if self.pollen_data[htr_nb] <= 1.0 else 1.0 # Cap opacity at 1.0
+                else:
+                    # Empty wax (Ci) / no tracked content - render like a plain, non-robotic
+                    # frame (see add_frame) rather than invisible: same colour, same fixed
+                    # opacity (the ABC's own base opacity, not a content-derived fraction).
+                    color = "gray"
+                    opacity = self.opacity
 
                 subframe = make_wall(
                     x=[[self.x, self.x], [self.x, self.x]],
@@ -148,17 +165,36 @@ class ABC(Frame):
 
         self.textures = subframes
 
-    def load_data(self, brood_data: list, honey_data: list):
+    def load_data(self, brood_data: list, honey_data: list, nectar_data: list = None, pollen_data: list = None):
         """
-        Loads the brood and honey data into the ABC object.
+        Loads the brood/honey/nectar/pollen data into the ABC object.
 
         :param brood_data: 10 values, indexed by htr_nb (0-9). Each is a 0-1 brood coverage
             fraction (0 = none, 0.3333 = Co en bordure, 0.5 = Co éparse, 1 = Co/full).
         :param honey_data: 10 values, indexed by htr_nb (0-9). Each is a honey volume in ml,
             capped at MAX_HONEY_ML for opacity purposes.
+        :param nectar_data: 10 values, indexed by htr_nb (0-9). Each is a 0-1 coverage fraction
+            for uncapped nectar/syrup (not yet capped as honey). Defaults to all zero.
+        :param pollen_data: 10 values, indexed by htr_nb (0-9). Each is a 0-1 coverage fraction
+            for pollen. Defaults to all zero.
+        :raises AssertionError: if any subregion has more than one nonzero channel - a subregion
+            can only be one thing at a time.
         """
+        nectar_data = nectar_data if nectar_data is not None else [0] * 10
+        pollen_data = pollen_data if pollen_data is not None else [0] * 10
+
+        channels = {"brood": brood_data, "honey": honey_data, "nectar": nectar_data, "pollen": pollen_data}
+        for htr_nb in range(10):
+            active = [name for name, data in channels.items() if data[htr_nb] > 0]
+            assert len(active) <= 1, (
+                f"h{htr_nb:02d} is assigned to more than one content type at once: {active} "
+                "- a subregion can only be one thing at a time."
+            )
+
         self.brood_data = brood_data
         self.honey_data = honey_data
+        self.nectar_data = nectar_data
+        self.pollen_data = pollen_data
 
 class BoxHive(PlotlyObject):
     def __init__(self, width, height, depth, opacity):
@@ -214,7 +250,7 @@ class BoxHive(PlotlyObject):
         _x = self.frame_positioning[position]
         # Create the frame
         frame = Frame(x=_x, height=self.frame_height, depth=self.frame_depth, opacity=opacity)
-        frame.draw_plotly(self.height, self.depth, "brown", f"frame_{position}", show_legend)
+        frame.draw_plotly(self.height, self.depth, "peru", f"frame_{position}", show_legend) # Same colour as the hive's own walls
         # And store it in occupancy
         self.occupancy[position] = frame
 
@@ -233,14 +269,19 @@ class BoxHive(PlotlyObject):
         # And store it in occupancy
         self.occupancy[position] = abc
 
-    def loadABCdata(self, brood_data: dict, honey_data: dict):
+    def loadABCdata(self, brood_data: dict, honey_data: dict, nectar_data: dict = None, pollen_data: dict = None):
         """
-        Loads the brood and honey data into the ABC objects.
+        Loads the brood/honey/nectar/pollen data into the ABC objects.
 
         :param brood_data: {abc_name: 10 values (htr_nb 0-9)}, each a 0-1 brood coverage
             fraction. See ABC.load_data.
         :param honey_data: {abc_name: 10 values (htr_nb 0-9)}, each a honey volume in ml
             (MAX_HONEY_ML theoretical max per subregion). See ABC.load_data.
+        :param nectar_data: {abc_name: 10 values (htr_nb 0-9)}, each a 0-1 coverage fraction.
+            Optional - abc's not present here (or if the dict itself is None) default to all
+            zero. See ABC.load_data.
+        :param pollen_data: {abc_name: 10 values (htr_nb 0-9)}, each a 0-1 coverage fraction.
+            Optional, same defaulting as nectar_data. See ABC.load_data.
         """
         for abc in self.occupancy.values():
             if isinstance(abc, ABC):
@@ -248,7 +289,11 @@ class BoxHive(PlotlyObject):
                 assert name in brood_data.keys(), f"Brood data for {name} not found!"
                 assert name in honey_data.keys(), f"Honey data for {name} not found!"
 
-                abc.load_data(brood_data[name], honey_data[name])
+                abc.load_data(
+                    brood_data[name], honey_data[name],
+                    nectar_data.get(name) if nectar_data else None,
+                    pollen_data.get(name) if pollen_data else None,
+                )
 
     def getAllTextures(self):
         """
@@ -275,7 +320,7 @@ class BoxHive(PlotlyObject):
             x=[[0, self.width], [0, self.width]],
             y=[[0, 0], [self.depth, self.depth]],
             z=[[0, 0], [0, 0]],
-            color="saddlebrown",
+            color="peru",
             opacity=self.opacity,
             name="Bottom",
             legendgroup="hive",
@@ -315,7 +360,7 @@ class BoxHive(PlotlyObject):
             x=[[0, 0], [0, 0]],
             y=[[0, self.depth], [0, self.depth]],
             z=[[0, 0], [self.height, self.height]],
-            color="sienna",
+            color="peru",
             opacity=self.opacity,
             name="Right",
             legendgroup="hive",
@@ -328,7 +373,7 @@ class BoxHive(PlotlyObject):
             x=[[self.width, self.width], [self.width, self.width]],
             y=[[0, self.depth], [0, self.depth]],
             z=[[0, 0], [self.height, self.height]],
-            color="sienna",
+            color="peru",
             opacity=self.opacity,
             name="Left",
             legendgroup="hive",
@@ -348,3 +393,53 @@ class BoxHive(PlotlyObject):
             showlegend = show_legend
         )
         self.textures = [bottom_wall, back_wall, front_wall, left_wall, right_wall, landing_pad]
+
+def build_time_slider_figure(hive: BoxHive, data_over_time: dict) -> go.Figure:
+    """
+    Builds a Plotly figure with a time-navigation slider, showing how each ABC subregion's
+    content evolves across a sequence of time steps (e.g. one per hive visit).
+
+    :param hive: a BoxHive with its frames/partitions/ABCs already added, and hive.draw_plotly()
+        already called once (the walls are static across time - only ABC content changes).
+        Occupancy (which positions hold what) must stay the same for every time step; only call
+        loadABCdata-style content on it, don't add/remove frames between steps.
+    :param data_over_time: {label: {"brood": ..., "honey": ..., "nectar": ..., "pollen": ...}},
+        one entry per time step - the inner dict is passed straight to hive.loadABCdata as
+        keyword arguments ("nectar"/"pollen" are optional there, see loadABCdata). Slider steps
+        follow sorted(data_over_time.keys()); label is typically a date or a string that sorts
+        correctly (e.g. "2026-06-15").
+    :return: a go.Figure with one frame per time step and a slider to move between them.
+    """
+    assert hive.textures, "Call hive.draw_plotly() before building the slider (walls are static across frames)."
+    labels = sorted(data_over_time.keys())
+    assert len(labels) > 0, "data_over_time must have at least one time step"
+
+    frames = []
+    for label in labels:
+        step = data_over_time[label]
+        hive.loadABCdata(
+            step["brood"], step["honey"],
+            step.get("nectar"), step.get("pollen"),
+        )
+        frames.append(go.Frame(data=hive.getAllTextures(), name=str(label)))
+
+    return go.Figure(
+        data=frames[0].data,
+        frames=frames,
+        layout=go.Layout(
+            sliders=[{
+                "active": 0,
+                "currentvalue": {"prefix": "Time: "},
+                "steps": [
+                    {
+                        "args": [[f.name], {"mode": "immediate",
+                                             "frame": {"duration": 0, "redraw": True},
+                                             "transition": {"duration": 0}}],
+                        "label": f.name,
+                        "method": "animate",
+                    }
+                    for f in frames
+                ],
+            }],
+        ),
+    )
