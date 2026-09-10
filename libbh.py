@@ -299,7 +299,10 @@ class BoxHive(PlotlyObject):
         """
         Function to retrieve all (active) textures of the hive.
         """
-        all_textures = self.get_textures()
+        # get_textures() returns None (not []) when there's nothing to draw yet - e.g. the hive's
+        # own walls before draw_plotly() has been called - so getAllTextures() works whether or
+        # not the caller wants walls drawn at all.
+        all_textures = self.get_textures() or []
         for pos in self.occupancy:
             if self.occupancy[pos] is None:
                 continue
@@ -307,7 +310,7 @@ class BoxHive(PlotlyObject):
                 raise(ValueError(f"Invalid object type in occupancy: {type(self.occupancy[pos])}, {self.occupancy[pos]}"))
             if issubclass(type(self.occupancy[pos]), ABC):
                 self.occupancy[pos].draw_plotly(self.height, self.depth) # ABC textures computed at the very end
-            all_textures.extend(self.occupancy[pos].get_textures())
+            all_textures.extend(self.occupancy[pos].get_textures() or [])
 
         return all_textures
 
@@ -427,6 +430,7 @@ def build_time_slider_figure(hive: BoxHive, data_over_time: dict) -> go.Figure:
         data=frames[0].data,
         frames=frames,
         layout=go.Layout(
+            legend=dict(groupclick="toggleitem"),  # walls share legendgroup="hive" for the "Hive" header only - don't toggle the whole group on one click
             sliders=[{
                 "active": 0,
                 "currentvalue": {"prefix": "Time: "},
