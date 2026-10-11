@@ -125,8 +125,9 @@ class ABC(Frame):
                 # so the check order here doesn't matter - it's just which colour a subregion is.
                 if self.brood_data[htr_nb] > 0:
                     color = "brown"
-                    # Brood level is already a 0-1 coverage fraction (1 = Co, 0.5 = Co
-                    # éparse, 0.3333 = Co en bordure) - use it as opacity directly.
+                    # Brood level is already a 0-1 weight (1 = Co; the partial codes, Co éparse
+                    # and Co en bordure, are fractions of that, set in FrameContents' _BASE_CODES)
+                    # - use it as opacity directly.
                     opacity=self.brood_data[htr_nb] if self.brood_data[htr_nb] <= 1.0 else 1.0 # Cap opacity at 1.0
                 elif self.honey_data[htr_nb] > 0:
                     color = "yellow"
@@ -170,7 +171,8 @@ class ABC(Frame):
         Loads the brood/honey/nectar/pollen data into the ABC object.
 
         :param brood_data: 10 values, indexed by htr_nb (0-9). Each is a 0-1 brood coverage
-            fraction (0 = none, 0.3333 = Co en bordure, 0.5 = Co éparse, 1 = Co/full).
+            weight (0 = none, 1 = Co/full; Co éparse and Co en bordure are partial values
+            defined in FrameContents' _BASE_CODES, which is the single source of truth).
         :param honey_data: 10 values, indexed by htr_nb (0-9). Each is a honey volume in ml,
             capped at MAX_HONEY_ML for opacity purposes.
         :param nectar_data: 10 values, indexed by htr_nb (0-9). Each is a 0-1 coverage fraction
