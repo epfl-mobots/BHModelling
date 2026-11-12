@@ -1,0 +1,21 @@
+name: bhm
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python
+  - plotly
+  - numpy
+  - ipykernel
+  - jupyter
+  - pandas
+  - matplotlib
+  - scipy
+  - tzdata
+  - python-tzdata
+  - influxdb-client
+  - influxdb
+  - freetype=2.14.3
+  - certifi
+  - pillow[version='>=13.0']
+prefix: /opt/miniconda3/envs/bhm
